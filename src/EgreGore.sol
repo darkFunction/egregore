@@ -26,7 +26,7 @@ contract Egregore is VRFV2WrapperConsumerBase, Ownable {
     address constant BURN_ADDRESS = 0x0000000000000000000000000000000000000666;
     IERC20 constant BITCOIN =
         IERC20(0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9);
-    uint32 constant VRF_CALLBACK_GAS_LIMIT = 100000;
+    uint32 constant VRF_CALLBACK_GAS_LIMIT = 41364;
     uint16 constant VRF_REQUEST_CONFIRMATIONS = 5;
 
     address[] public disciples;
