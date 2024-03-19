@@ -26,14 +26,14 @@ contract Egregore is VRFV2WrapperConsumerBase, Ownable {
     address constant BURN_ADDRESS = 0x0000000000000000000000000000000000000666;
     IERC20 constant BITCOIN =
         IERC20(0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9);
-    uint32 constant VRF_CALLBACK_GAS_LIMIT = 41364;
+    uint32 constant VRF_CALLBACK_GAS_LIMIT = 71460;
     uint16 constant VRF_REQUEST_CONFIRMATIONS = 5;
 
     address[] public disciples;
     mapping(address => uint256) public penitences;
     uint public totalPenitences = 0;
 
-    // Sat Apr 20 2024 00:00:00 GMT+0000
+    // Sat Apr 20 2024 00:00:00 UTC
     uint public constant CLOSE_TIME = 1713571200;
     uint256 public requestId;
     RequestStatus public requestStatus;
@@ -67,6 +67,7 @@ contract Egregore is VRFV2WrapperConsumerBase, Ownable {
     function beginCeremony() public {
         require(state == State.OPEN);
         require(block.timestamp >= CLOSE_TIME);
+
         state = State.CHOOSING;
 
         requestId = requestRandomness(
@@ -76,6 +77,28 @@ contract Egregore is VRFV2WrapperConsumerBase, Ownable {
         );
         requestStatus = RequestStatus({
             paid: VRF_V2_WRAPPER.calculateRequestPrice(VRF_CALLBACK_GAS_LIMIT),
+            randomWord: 0,
+            fulfilled: false
+        });
+
+        emit ChoosingDisciple(requestId);
+    }
+
+    // Allow owner to re-attempt a failed VRF request
+    function forceBeginCeremony(uint32 callbackGasLimit) external onlyOwner {
+        require(block.timestamp >= CLOSE_TIME);
+        require(state != State.CLOSED);
+        require(requestStatus.fulfilled == false);
+
+        state = State.CHOOSING;
+
+        requestId = requestRandomness(
+            callbackGasLimit,
+            VRF_REQUEST_CONFIRMATIONS,
+            1
+        );
+        requestStatus = RequestStatus({
+            paid: VRF_V2_WRAPPER.calculateRequestPrice(callbackGasLimit),
             randomWord: 0,
             fulfilled: false
         });
