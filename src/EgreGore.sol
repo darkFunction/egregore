@@ -16,7 +16,7 @@ contract Egregore is VRFV2WrapperConsumerBase, Ownable {
     }
 
     event ChoosingDisciple(uint256 requestId);
-    event DiscipleChosen(uint256 penitenceIndex, address fleshHost);
+    event DiscipleChosen(address fleshHost);
 
     struct RequestStatus {
         uint256 paid;
@@ -24,16 +24,22 @@ contract Egregore is VRFV2WrapperConsumerBase, Ownable {
         uint256 randomWord;
     }
 
+    struct Entry {
+        address discipleAddress;
+        uint256 startPenitence;
+        uint256 endPenitence;
+    }
+
     address constant LINK_TOKEN = 0x514910771AF9Ca656af840dff83E8264EcF986CA;
     address constant VRF_WRAPPER = 0x5A861794B927983406fCE1D062e00b9368d97Df6;
-    address constant BURN_ADDRESS = 0x0000000000000000000000000000000000000666;
+    address constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
     IERC20 constant BITCOIN =
         IERC20(0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9);
     uint32 constant VRF_CALLBACK_GAS_LIMIT = 70000;
     uint16 constant VRF_REQUEST_CONFIRMATIONS = 5;
     uint32 public constant CLOSE_TIME = 1713571200; // Sat Apr 20 2024 00:00:00 UTC
 
-    address[] public disciples;
+    Entry[] public entries;
     mapping(address => uint256) public penitences;
     uint256 public totalPenitences = 0;
     uint256 public requestId;
@@ -45,23 +51,25 @@ contract Egregore is VRFV2WrapperConsumerBase, Ownable {
         Ownable(msg.sender)
     {}
 
-    function discipleCount() public view returns (uint) {
-        return disciples.length;
-    }
-
     function disciplePenitence(address _disciple) public view returns (uint) {
         return penitences[_disciple];
+    }
+
+    function entryCount() public view returns (uint) {
+        return entries.length;
     }
 
     /// @notice Enter draw. One token = one chance
     function sacrifice(uint _amount) external {
         require(state == State.OPEN);
 
-        if (penitences[msg.sender] == 0) {
-            disciples.push(msg.sender);
-        }
-        penitences[msg.sender] += _amount;
+        entries.push(
+            Entry(msg.sender, totalPenitences, totalPenitences + _amount - 1)
+        );
+
         totalPenitences += _amount;
+        penitences[msg.sender] += _amount;
+
         BITCOIN.transferFrom(msg.sender, address(this), _amount);
     }
 
@@ -111,35 +119,47 @@ contract Egregore is VRFV2WrapperConsumerBase, Ownable {
         require(state != State.CLOSED);
         require(requestStatus.fulfilled);
 
+        state = State.CLOSED;
+
         address disciple = identifyDisciple(requestStatus.randomWord);
 
         // Send atonement to egregore
         uint256 atonement = (BITCOIN.balanceOf(address(this)) -
-            disciplePenitence(disciple)) / 2;
+            penitences[disciple]) / 2;
         if (atonement > 0) {
             BITCOIN.transfer(address(BURN_ADDRESS), atonement);
         }
 
         BITCOIN.transfer(disciple, BITCOIN.balanceOf(address(this)));
 
-        state = State.CLOSED;
+        emit DiscipleChosen(disciple);
     }
 
-    function identifyDisciple(uint256 randomWord) private returns (address) {
+    function identifyDisciple(
+        uint256 randomWord
+    ) private view returns (address) {
         uint256 penitenceIndex = randomWord % totalPenitences;
-        uint256 discipleIndex = 0;
-        uint256 runningTotal = penitences[disciples[0]];
+        uint256 left = 0;
+        uint256 right = entries.length - 1;
 
-        while (runningTotal <= penitenceIndex) {
-            discipleIndex++;
-            runningTotal += penitences[disciples[discipleIndex]];
+        while (left <= right) {
+            uint256 mid = left + (right - left) / 2;
+            uint256 midStartPenitence = entries[mid].startPenitence;
+            uint256 midEndPenitence = entries[mid].endPenitence;
+
+            if (
+                penitenceIndex >= midStartPenitence &&
+                penitenceIndex <= midEndPenitence
+            ) {
+                return entries[mid].discipleAddress;
+            } else if (penitenceIndex < midStartPenitence) {
+                right = mid - 1;
+            } else {
+                left = mid + 1;
+            }
         }
 
-        address disciple = disciples[discipleIndex];
-
-        emit DiscipleChosen(penitenceIndex, disciple);
-
-        return disciple;
+        return BURN_ADDRESS;
     }
 
     /**
