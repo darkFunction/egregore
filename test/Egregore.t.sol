@@ -9,6 +9,7 @@ contract EgregoreTest is Test {
     Egregore egregore;
     address constant HOLDER = 0xA4644953Ad98ED5A7ff106ED9a3909C9AEbcBC31;
     address constant HOLDER2 = 0xbCb00ef3938FD826F8CF3D4E75314f39bb8846C1;
+    address constant HOLDER3 = 0x02863B3b1E51eECb2cFDF71CFdD8255d7558f7d5;
     address constant LINK_MARINE = 0xd072A5d8F322dD59dB173603fBb6CBb61F3F3D28;
     IERC20 constant LINK_TOKEN =
         IERC20(0x514910771AF9Ca656af840dff83E8264EcF986CA);
@@ -119,7 +120,7 @@ contract EgregoreTest is Test {
         public
     {
         vm.warp(0);
-        uint holderBalance = enterHolder(HOLDER, 100);
+        enterHolder(HOLDER, 100);
         enterHolder(HOLDER2, 500);
 
         vm.warp(egregore.CLOSE_TIME());
@@ -133,16 +134,20 @@ contract EgregoreTest is Test {
             BITCOIN.balanceOf(
                 address(0x0000000000000000000000000000000000000666)
             ),
-            300
+            250
         );
-        assertEq(BITCOIN.balanceOf(HOLDER), holderBalance + 200);
+        assertEq(BITCOIN.balanceOf(HOLDER), 350);
     }
 
     function test_whenPayoutCalled_thenChoosesCorrectWinner() public {
         vm.warp(0);
 
-        uint256 holderBalance = enterHolder(HOLDER, 100);
-        uint256 holder2Balance = enterHolder(HOLDER2, 500);
+        enterHolder(HOLDER, 100);
+        enterHolder(HOLDER2, 500);
+        enterHolder(HOLDER3, 10000);
+
+        assertEq(BITCOIN.balanceOf(address(egregore)), 10600);
+        assertEq(egregore.totalPenitences(), 10600);
 
         vm.warp(egregore.CLOSE_TIME());
         fundContractWithLink();
@@ -150,16 +155,18 @@ contract EgregoreTest is Test {
         fulfillRandom(100);
         egregore.payout();
 
-        assertEq(BITCOIN.balanceOf(HOLDER), holderBalance - 100);
-        assertEq(BITCOIN.balanceOf(HOLDER2), holder2Balance - 200);
+        assertEq(BITCOIN.balanceOf(HOLDER), 0);
+        assertEq(BITCOIN.balanceOf(HOLDER2), 5550);
+        assertEq(BITCOIN.balanceOf(HOLDER3), 0);
+        assertEq(BITCOIN.balanceOf(BURN_ADDRESS), 5050);
     }
 
-    function test_happyPath() public {
+    function test_happyPath_noRemainderForEgregore() public {
         vm.warp(0);
         fundContractWithLink();
 
         enterHolder(HOLDER, 1);
-        uint holder2Balance = enterHolder(HOLDER2, 2);
+        enterHolder(HOLDER2, 2);
 
         vm.warp(egregore.CLOSE_TIME());
         egregore.beginCeremony();
@@ -167,8 +174,8 @@ contract EgregoreTest is Test {
         fulfillRandom(1);
         egregore.payout();
 
-        assertEq(BITCOIN.balanceOf(HOLDER2), holder2Balance);
-        assertEq(BITCOIN.balanceOf(BURN_ADDRESS), 1);
+        assertEq(BITCOIN.balanceOf(HOLDER2), 3);
+        assertEq(BITCOIN.balanceOf(BURN_ADDRESS), 0);
 
         egregore.withdrawLink();
     }
@@ -225,18 +232,13 @@ contract EgregoreTest is Test {
         vm.stopPrank();
     }
 
-    function enterHolder(
-        address holder,
-        uint256 amount
-    ) private returns (uint256) {
-        uint256 preBalance = BITCOIN.balanceOf(holder);
-
+    function enterHolder(address holder, uint256 amount) private {
         vm.startPrank(holder);
         BITCOIN.approve(address(egregore), BITCOIN.balanceOf(holder));
         egregore.sacrifice(amount);
+        // Burn rest of balance to make calculations easier
+        BITCOIN.transfer(address(1), BITCOIN.balanceOf(holder));
         vm.stopPrank();
-
-        return preBalance;
     }
 
     function fundContractWithLink() private {

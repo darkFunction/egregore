@@ -53,6 +53,7 @@ contract Egregore is VRFV2WrapperConsumerBase, Ownable {
         return penitences[_disciple];
     }
 
+    /// @notice Enter draw. One token = one chance
     function sacrifice(uint _amount) external {
         require(state == State.OPEN);
 
@@ -64,6 +65,7 @@ contract Egregore is VRFV2WrapperConsumerBase, Ownable {
         BITCOIN.transferFrom(msg.sender, address(this), _amount);
     }
 
+    /// @notice Starts winner selection process. Can only be called once.
     function beginCeremony() public {
         require(state == State.OPEN);
         require(block.timestamp >= CLOSE_TIME);
@@ -90,6 +92,7 @@ contract Egregore is VRFV2WrapperConsumerBase, Ownable {
         emit ChoosingDisciple(requestId);
     }
 
+    /// @notice Chainlink VRF callback
     function fulfillRandomWords(
         uint256 _requestId,
         uint256[] memory _randomWords
@@ -101,26 +104,28 @@ contract Egregore is VRFV2WrapperConsumerBase, Ownable {
         requestStatus.randomWord = _randomWords[0];
     }
 
-    /// @dev Rounds down split in favour of disciple
+    /// @notice Can only be called once
+    /// @dev Disciple gets their penitence back plus half the rest of pot,
+    ///      rounded in favour of disciple.
     function payout() public {
         require(state != State.CLOSED);
         require(requestStatus.fulfilled);
 
-        // Send atonement to egregore
-        BITCOIN.transfer(
-            address(BURN_ADDRESS),
-            BITCOIN.balanceOf(address(this)) / 2
-        );
+        address disciple = identifyDisciple(requestStatus.randomWord);
 
-        BITCOIN.transfer(
-            chooseDisciple(requestStatus.randomWord),
-            BITCOIN.balanceOf(address(this))
-        );
+        // Send atonement to egregore
+        uint256 atonement = (BITCOIN.balanceOf(address(this)) -
+            disciplePenitence(disciple)) / 2;
+        if (atonement > 0) {
+            BITCOIN.transfer(address(BURN_ADDRESS), atonement);
+        }
+
+        BITCOIN.transfer(disciple, BITCOIN.balanceOf(address(this)));
 
         state = State.CLOSED;
     }
 
-    function chooseDisciple(uint256 randomWord) private returns (address) {
+    function identifyDisciple(uint256 randomWord) private returns (address) {
         uint256 penitenceIndex = randomWord % totalPenitences;
         uint256 discipleIndex = 0;
         uint256 runningTotal = penitences[disciples[0]];
