@@ -124,10 +124,13 @@ contract Egregore is VRFV2WrapperConsumerBase, Ownable {
         address disciple = identifyDisciple(requestStatus.randomWord);
 
         // Send atonement to egregore
-        uint256 atonement = (BITCOIN.balanceOf(address(this)) -
-            penitences[disciple]) / 2;
-        if (atonement > 0) {
-            BITCOIN.transfer(address(BURN_ADDRESS), atonement);
+        uint256 contractBalance = BITCOIN.balanceOf(address(this));
+        uint256 penitence = penitences[disciple];
+        if (contractBalance > penitence) {
+            uint256 atonement = (contractBalance - penitence) / 2;
+            if (atonement > 0) {
+                BITCOIN.transfer(address(BURN_ADDRESS), atonement);
+            }
         }
 
         BITCOIN.transfer(disciple, BITCOIN.balanceOf(address(this)));
