@@ -36,7 +36,7 @@ contract Egregore is VRFV2WrapperConsumerBase, Ownable {
     IERC20 constant BITCOIN =
         IERC20(0x72e4f9F808C49A2a61dE9C5896298920Dc4EEEa9);
     uint32 constant VRF_CALLBACK_GAS_LIMIT = 70000;
-    uint16 constant VRF_REQUEST_CONFIRMATIONS = 5;
+    uint16 constant VRF_REQUEST_CONFIRMATIONS = 3;
     uint32 public constant CLOSE_TIME = 1713571200; // Sat Apr 20 2024 00:00:00 UTC
 
     Entry[] public entries;
